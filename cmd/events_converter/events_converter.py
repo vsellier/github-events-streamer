@@ -9,7 +9,6 @@ import time
 import uuid
 
 
-
 class EventConverter:
     logger = logging.getLogger()
     config = configparser.ConfigParser()
@@ -17,6 +16,7 @@ class EventConverter:
     consumer = None
     producer = None
 
+    consumer_group_id = 'event_converter'
     github_events_topic_name = None
     event_topic_name = None
     last_event_id = -1
@@ -30,17 +30,21 @@ class EventConverter:
 
     def connect_to_kafka(self):
         bootstrap_servers = self.config.get('kafka', 'bootstrap_servers')
+        self.logger.info("Kafka server(s): %s", bootstrap_servers)
+        self.logger.info(
+            "Creating kafka consumer with group_id=%s...", self.consumer_group_id)
         self.consumer = KafkaConsumer(
             bootstrap_servers=bootstrap_servers,
-            group_id='event_converter',
-            value_deserializer=json.loads,
+            group_id=self.consumer_group_id,
+            value_deserializer=lambda m: json.loads(m, encoding='utf-8'),
             key_deserializer=self.key_deserializer
-            )
+        )
 
         self.consumer.subscribe(self.github_events_topic_name)
 
+        self.logger.info("Creating kafka producer...")
         self.producer = KafkaProducer(bootstrap_servers=bootstrap_servers,
-                                    #   compression_type='gzip',
+                                      #   compression_type='gzip',
                                       )
 
     def shutdown(self):
@@ -52,11 +56,11 @@ class EventConverter:
 
     def convert_events(self, key, events):
         new_event = 0
+        self.logger.info("full messages=%s", json.dumps(events))
         for event in events:
             # if (event['id]'])
-            self.logger.info(event)
+            self.logger.info("event=%s", json.dumps(event))
             self.logger.info(event['id'])
-    
 
     def main(self):
         if len(sys.argv) != 2:
@@ -82,13 +86,14 @@ class EventConverter:
             self.logger.info("Converting events of request_id=%s", msg.key)
 
             events = msg.value
+            self.logger.info("number of events:%d", len(events))
 
             self.convert_events(msg.key, events)
 
             end = time.time() * 1000
-            self.logger.info("events of request_id=%s number_of_events=%d duration_ms=%d", msg.key, len(events), end-start)
+            self.logger.info(
+                "events of request_id=%s number_of_events=%d duration_ms=%d", msg.key, len(events), end-start)
         # self.consumer.commit()
-
 
 
 if __name__ == "__main__":
