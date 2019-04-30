@@ -27,7 +27,7 @@ class EventRequester:
         self.consumer = KafkaConsumer(
             bootstrap_servers=bootstrap_servers,
             group_id='event_requester',
-            value_deserializer=json.loads,
+            # value_deserializer=json.loads,
             key_deserializer=bytes.decode)
 
         self.consumer.subscribe(self.response_topic_name)
@@ -35,8 +35,6 @@ class EventRequester:
         self.producer = KafkaProducer(bootstrap_servers=bootstrap_servers,
                                       #   compression_type='gzip',
                                       )
-
-
 
     def ask_for_events(self):
         request_id = str(uuid.uuid1())
@@ -60,16 +58,17 @@ class EventRequester:
         # Block for 'synchronous' sends
         try:
             record_metadata = future.get(timeout=10)
-        except KafkaError as err:
+        except Exception as err:
             # Decide what to do if produce request failed...
-            logger.error("Error sending the request $s : %s", request, err)
+            self.logger.error(
+                "Error sending the request %s : %s", request, err)
             return None
 
         return request_id
 
     def wait_for_response(self, request_id, delay):
         self.logger.info(
-            "Waiting for response of request_id=%s delay_s=%d", request_id, delay)
+            "Waiting for response of request_id=%s on topic=%s delay_s=%d", request_id, self.response_topic_name, delay)
 
         start = time.time() * 1000
         result = None
@@ -77,26 +76,29 @@ class EventRequester:
             response = self.consumer.poll(timeout_ms=delay*1000, max_records=1)
 
             if len(response) == 0:
-                self.logger.error("Response for request_id=%s not received after %d", request_id, delay)
+                self.logger.error(
+                    "Response for request_id=%s not received after %ds", request_id, delay)
                 break
             # only one message
             for key in response.keys():
                 message = response[key][0]
             if message.key == request_id:
-                self.logger.info("Response for request_id=%s received", request_id)
+                self.logger.info(
+                    "Response for request_id=%s received", request_id)
                 result = message.value
-                self.consumer.commit()
-                break;
+                # self.consumer.commit()
+                break
             else:
                 self.logger.info("Message key=%s ignored", message.key)
 
         end = time.time() * 1000
-        self.logger.info("request_id=%s response_received=%s duration_ms=%d", request_id, result != None, end-start)
+        self.logger.info("request_id=%s response_received=%s duration_ms=%d",
+                         request_id, result != None, end-start)
         return result
 
     def parse_response(self, response, last_event_id):
         new_last_event_id = last_event_id
-        
+
         # print(len(response))
 
         for e in response:
@@ -104,7 +106,6 @@ class EventRequester:
         # self.logger.info(response)
         # event = json.load(response[0])
         # print(event)
-
 
     def shutdown(self):
         self.logger.info("Shutting down kafka consumer ...")
