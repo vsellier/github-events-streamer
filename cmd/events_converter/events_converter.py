@@ -15,6 +15,7 @@ class EventConverter:
 
     consumer = None
     producer = None
+    max_request_size = 1048576 * 5
 
     consumer_group_id = 'event_converter'
     github_events_topic_name = None
@@ -37,14 +38,18 @@ class EventConverter:
             bootstrap_servers=bootstrap_servers,
             group_id=self.consumer_group_id,
             value_deserializer=lambda m: json.loads(m, encoding='utf-8'),
-            key_deserializer=self.key_deserializer
+            key_deserializer=self.key_deserializer,
+            session_timeout_ms=30000,
+            enable_auto_commit=False,
         )
 
         self.consumer.subscribe(self.github_events_topic_name)
 
         self.logger.info("Creating kafka producer...")
         self.producer = KafkaProducer(bootstrap_servers=bootstrap_servers,
-                                      #   compression_type='gzip',
+                                      compression_type='gzip',
+                                      key_serializer=str.encode,
+                                      max_request_size=self.max_request_size,
                                       )
 
     def shutdown(self):
@@ -54,13 +59,62 @@ class EventConverter:
         self.logger.info("Shutting down kafka producer...")
         self.producer.close()
 
+    def send_event(self, key, event):
+        try:
+            event_json = json.dumps(event).encode('utf-8')
+            self.producer.send(topic=self.event_topic_name,
+                               key=event['id'],
+                               value=event_json)
+        except Exception as err:
+            self.logger.error(
+                "Error sending event on topic=%s event:%s : %s", self.event_topic_name, event_json, err)
+
     def convert_events(self, key, events):
-        new_event = 0
-        self.logger.info("full messages=%s", json.dumps(events))
+        new_events = 0
+        old_last_event_id = self.last_event_id
+        old_last_event = self.last_event
+        events_missed = self.last_event_id > -1
+        # keep the older event of the current batch
+        # to compute the missing event delay
+        current_first_event = None
+        first_event_id = None
+
         for event in events:
-            # if (event['id]'])
-            self.logger.info("event=%s", json.dumps(event))
-            self.logger.info(event['id'])
+            # self.logger.info(event)
+            # Initialising the older event during the first iteration
+            if current_first_event == None:
+                current_first_event = event
+
+            event_id = int(event['id'])
+
+            # find the smallest event id
+            if event_id < int(current_first_event['id']):
+                current_first_event = event
+
+            # new event. increasing the counter
+            if event_id > old_last_event_id:
+                new_events += 1
+                self.send_event(key, event)
+
+            # compute the most recent event
+            if event_id > self.last_event_id:
+                self.last_event_id = event_id
+                self.last_event = event
+
+            # the bigger id of the previous batch is found
+            # we have not missed any event
+            if event_id <= old_last_event_id:
+                events_missed = False
+                break
+            else:
+                first_event_id = event_id
+
+        if events_missed:
+            self.logger.warning("request_id=%s event_count=%d some events missed between event_id=%d and event_id=%d max_missed=%d", key,
+                                len(events), old_last_event_id, self.last_event_id, self.last_event_id - old_last_event_id)
+        else:
+            self.logger.info("request_id=%s new_events_count=%d event_count=%d first_event_id=%s last_event_id=%s",
+                             key, new_events, len(events), first_event_id, self.last_event_id)
 
     def main(self):
         if len(sys.argv) != 2:
@@ -83,16 +137,16 @@ class EventConverter:
 
         for msg in self.consumer:
             start = time.time() * 1000
-            self.logger.info("Converting events of request_id=%s", msg.key)
+            self.logger.info("request_id=%s in progress ...", msg.key)
 
             events = msg.value
-            self.logger.info("number of events:%d", len(events))
 
             self.convert_events(msg.key, events)
+            self.consumer.commit()
 
             end = time.time() * 1000
             self.logger.info(
-                "events of request_id=%s number_of_events=%d duration_ms=%d", msg.key, len(events), end-start)
+                "request_id=%s done in duration_ms=%d", msg.key, end-start)
         # self.consumer.commit()
 
 
