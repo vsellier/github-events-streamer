@@ -15,10 +15,12 @@ class EventConverter:
 
     consumer = None
     producer = None
+    missed_events_producer = None
     max_request_size = 1048576 * 5
 
     consumer_group_id = 'event_converter'
     github_events_topic_name = None
+    github_missed_events_topic_name = None
     event_topic_name = None
     last_event_id = -1
     last_event = None
@@ -39,25 +41,31 @@ class EventConverter:
             group_id=self.consumer_group_id,
             value_deserializer=lambda m: json.loads(m, encoding='utf-8'),
             key_deserializer=self.key_deserializer,
-            session_timeout_ms=30000,
+            session_timeout_ms=120000,
             enable_auto_commit=False,
         )
 
         self.consumer.subscribe(self.github_events_topic_name)
 
-        self.logger.info("Creating kafka producer...")
+        self.logger.info("Creating kafka events producers...")
         self.producer = KafkaProducer(bootstrap_servers=bootstrap_servers,
                                       compression_type='gzip',
                                       key_serializer=str.encode,
                                       max_request_size=self.max_request_size,
                                       )
 
+        self.missed_events_producer = KafkaProducer(bootstrap_servers=bootstrap_servers,
+                                                    compression_type='gzip',
+                                                    max_request_size=self.max_request_size,
+                                                    )
+
     def shutdown(self):
         self.logger.info("Shutting down kafka consumer ...")
         self.consumer.commit()
         self.consumer.close()
-        self.logger.info("Shutting down kafka producer...")
+        self.logger.info("Shutting down kafka producers...")
         self.producer.close()
+        self.missed_events_producer.close()
 
     def send_event(self, key, event):
         try:
@@ -72,24 +80,24 @@ class EventConverter:
     def convert_events(self, key, events):
         new_events = 0
         old_last_event_id = self.last_event_id
-        old_last_event = self.last_event
+        last_batch_event = self.last_event
         events_missed = self.last_event_id > -1
         # keep the older event of the current batch
         # to compute the missing event delay
-        current_first_event = None
+        current_batch_first_event = None
         first_event_id = None
 
         for event in events:
             # self.logger.info(event)
             # Initialising the older event during the first iteration
-            if current_first_event == None:
-                current_first_event = event
+            if current_batch_first_event == None:
+                current_batch_first_event = event
 
             event_id = int(event['id'])
 
             # find the smallest event id
-            if event_id < int(current_first_event['id']):
-                current_first_event = event
+            if event_id < int(current_batch_first_event['id']):
+                current_batch_first_event = event
 
             # new event. increasing the counter
             if event_id > old_last_event_id:
@@ -112,9 +120,28 @@ class EventConverter:
         if events_missed:
             self.logger.warning("request_id=%s event_count=%d some events missed between event_id=%d and event_id=%d max_missed=%d", key,
                                 len(events), old_last_event_id, self.last_event_id, self.last_event_id - old_last_event_id)
+            self.notify_missed_events(
+                last_batch_event, current_batch_first_event)
         else:
             self.logger.info("request_id=%s new_events_count=%d event_count=%d first_event_id=%s last_event_id=%s",
                              key, new_events, len(events), first_event_id, self.last_event_id)
+            pass
+
+    def notify_missed_events(self, last_event_before_miss, first_event_after_miss):
+        message = {}
+        message['miss_start_id'] = last_event_before_miss['id']
+        message['miss_end_id'] = first_event_after_miss['id']
+        message['miss_start_date'] = last_event_before_miss['created_at']
+        message['miss_end_date'] = first_event_after_miss['created_at']
+
+        try:
+            message_json = json.dumps(message).encode('utf-8')
+            self.missed_events_producer.send(self.github_missed_events_topic_name,
+                                             value=message_json)
+            self.missed_events_producer.flush()
+        except Exception as err:
+            self.logger.error(
+                "Error sending message on topic=%s message:%s : %s", self.event_topic_name, message_json, err)
 
     def main(self):
         if len(sys.argv) != 2:
@@ -132,6 +159,8 @@ class EventConverter:
             'kafka', 'api_response_topic')
         self.event_topic_name = self.config.get(
             'kafka', 'events_topic')
+        self.github_missed_events_topic_name = self.config.get(
+            'kafka', 'missed_events_topic')
 
         self.connect_to_kafka()
 
