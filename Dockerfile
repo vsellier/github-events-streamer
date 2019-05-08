@@ -12,6 +12,6 @@ ENV PATH=${WORK_DIR}/python/bin:${PATH}
 
 RUN pip install --upgrade pip
 
-COPY requirements.txt /tmp/requirements
+COPY requirements.txt /tmp/requirements.txt
 
-RUN cat /tmp/requirements | xargs pip install 
+RUN pip install -r /tmp/requirements.txt
