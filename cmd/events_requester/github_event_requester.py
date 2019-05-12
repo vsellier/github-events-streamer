@@ -138,7 +138,10 @@ class EventRequester:
         while True:
             start = time.time() * 1000
             request_id = self.ask_for_events()
-            self.wait_for_response(request_id, 10)
+            if request_id != None:
+                self.wait_for_response(request_id, 10)
+            else:
+                self.logger.info("No request id returned, skipping response wait")
             end = time.time() * 1000
             self.logger.info("cycle done duration_ms=%d", end-start)
             # time.sleep(1)
