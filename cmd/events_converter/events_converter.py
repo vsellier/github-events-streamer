@@ -41,8 +41,10 @@ class EventConverter:
             group_id=self.consumer_group_id,
             value_deserializer=lambda m: json.loads(m, encoding='utf-8'),
             key_deserializer=self.key_deserializer,
-            session_timeout_ms=120000,
+            session_timeout_ms=60000,
+            heartbeat_interval_ms=10000,
             enable_auto_commit=False,
+            auto_offset_reset='earliest',
         )
 
         self.consumer.subscribe(self.github_events_topic_name)
@@ -171,6 +173,7 @@ class EventConverter:
             events = msg.value
 
             self.convert_events(msg.key, events)
+            self.logger.info("request_id=%s commiting consumer offset ...", msg.key)
             self.consumer.commit()
 
             end = time.time() * 1000
