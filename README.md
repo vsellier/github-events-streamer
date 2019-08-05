@@ -1,5 +1,16 @@
 # Github events follower
 
+## Requirements
+
+* A well configured python3 environment
+* pip
+
+## Install dependencies
+On the project based directory:
+```
+$ pip install -r requirements.txt
+```
+
 TODO 
 More info to come
 TODO 
