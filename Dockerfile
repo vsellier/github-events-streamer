@@ -2,7 +2,8 @@ FROM python:3.7
 
 ARG WORK_DIR=/srv/gitlog
 
-RUN useradd -md $WORK_DIR -s /bin/bash gitlog
+RUN useradd -md $WORK_DIR -s /bin/bash gitlog \
+  && apt update && apt install -y less jq
 
 USER gitlog
 
