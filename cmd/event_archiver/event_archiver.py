@@ -73,7 +73,7 @@ class FilesManager:
 
         if name in self.indexes:
             if self.indexes[name]["closed"]:
-                self.logger.warn("adding event to a closed index %s, reopening it", name)
+                self.logger.warning("adding event to a closed index %s, reopening it", name)
                 self.indexes[name]["closed"] = False
 
             count = self.indexes[name]["count"] + 1
