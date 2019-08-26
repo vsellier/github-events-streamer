@@ -2,3 +2,6 @@
 config.cfg
 config-alpha.cfg
 .cache
+.env
+user1.cfg
+
