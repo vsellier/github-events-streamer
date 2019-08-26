@@ -148,8 +148,8 @@ class GithubApiQueryConsumer:
         finally:
             self.check_quota()
 
-    def connect_to_github(self, login, password, client_id, client_secret):
-        self.logger.info("Using user %s to connect to github...", login)
+    def connect_to_github(self, client_id, client_secret):
+        self.logger.info("Using user %s to connect to github...", client_id)
         url = "https://api.github.com/rate_limit?client_id=%s&client_secret=%s" % (
             self.client_id, self.client_secret)
         self.query(url)
@@ -192,10 +192,7 @@ class GithubApiQueryConsumer:
         self.client_secret = self.ghuser_config.get(
             'github_user', 'client_secret')
 
-        github_user = self.ghuser_config.get('github_user', 'login')
         self.connect_to_github(
-            github_user,
-            self.ghuser_config.get('github_user', 'password'),
             self.client_id,
             self.client_secret)
 
