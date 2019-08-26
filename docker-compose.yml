@@ -1,0 +1,85 @@
+version: '3.7'
+
+services:
+  zookeeper:
+    image: zookeeper:3.4.14
+    volumes:
+      - "${ZOOKEEPER_DATA_DIR}:/datalog"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+    restart: unless-stopped
+
+  kafka:
+    build: docker/kafka
+    hostname: kafka
+    depends_on: 
+      - zookeeper
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - "${KAFKA_LOGS_DIR}:/data/kafka-logs"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+    restart: unless-stopped
+    
+  github_query:
+    build: 
+      context: docker/python
+    environment:
+        GLOBAL_CONFIG_FILE: ${GLOBAL_CONFIG_FILE}
+        SCRIPT_DIRECTORY: cmd/github_api_client
+        SCRIPT_NAME: github_api_client.py
+        PARAMS: ${GITHUB_CREDENTIALS_FILE}
+    volumes:
+      - ${PWD}:/srv/gitlog
+    depends_on:
+      - kafka
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+    restart: unless-stopped
+
+  github_event_requester:
+    build: 
+      context: docker/python
+    environment:
+        GLOBAL_CONFIG_FILE: ${GLOBAL_CONFIG_FILE}
+        SCRIPT_DIRECTORY: cmd/events_requester
+        SCRIPT_NAME: github_event_requester.py
+    volumes:
+      - ${PWD}:/srv/gitlog
+    depends_on:
+      - kafka
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+    restart: unless-stopped
+
+  github_event_converter:
+    build: 
+      context: docker/python
+    environment:
+        GLOBAL_CONFIG_FILE: ${GLOBAL_CONFIG_FILE}
+        SCRIPT_DIRECTORY: cmd/events_converter
+        SCRIPT_NAME: events_converter.py
+    volumes:
+      - ${PWD}:/srv/gitlog
+    depends_on:
+      - kafka
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+    restart: unless-stopped
+

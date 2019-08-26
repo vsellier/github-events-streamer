@@ -2,24 +2,34 @@
 
 ## Requirements
 
-* A well configured python3 environment
-* pip
+To run with docker (test environment)
+* Docker
+* docker-compose
 
-## Install dependencies
-On the project based directory:
+## Start locally
+
+* Copy ``docker-compose-dev.env`` to ``.env``
 ```
-$ pip install -r requirements.txt
+cp docker-compose-dev.env .env
+```
+* Adapt the ``.env`` file according your environment. Zookeeper and Kafka data are written by default on ``/tmp/gitlog``
+* Create a file ``cmd/github_api_client/user1.cfg`` file with a 
+```
+[github_user]
+client_id=<your user id>
+client_secret=<your user secret>
+```
+* start the whole stack with
+```
+docker-compose up
 ```
 
-TODO 
-More info to come
-TODO 
+## Appendix
 
 ## Kafka topics creation
 ```
-bin/kafka-topics.sh --zookeeper localhost:2181 --create --replication-factor 1 --partitions 1 --topic events-topic
-bin/kafka-topics.sh --zookeeper localhost:2181 --create --replication-factor 1 --partitions 8 --topic github-queries
-bin/kafka-topics.sh --zookeeper=localhost:2181 --create --partitions 1 --replication-factor 1 --config retention.ms=604800000 --topic github-response
-bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --partitions 1 --replication-factor 1 --config retention.ms=-1 --topic github-missed-event-periods
-bin/kafka-topics.sh --list --zookeeper localhost:2181
+./kafka-topics.sh --bootstrap-server localhost:9093 --create --replication-factor 1 --partitions 4 --config retention.ms=-1 --topic github-events
+./kafka-topics.sh --bootstrap-server localhost:9093 --create --replication-factor 1 --partitions 8 --topic github-queries
+./kafka-topics.sh --bootstrap-server localhost:9093 --create --partitions 1 --replication-factor 1 --config retention.ms=604800000 --topic github-response
+./kafka-topics.sh --bootstrap-server localhost:9093 --create --partitions 1 --replication-factor 1 --config retention.ms=-1 --topic github-missed-event-periods
 ```
