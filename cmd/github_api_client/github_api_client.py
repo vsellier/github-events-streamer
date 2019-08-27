@@ -17,7 +17,6 @@ class GithubApiQueryConsumer:
     ghuser_config = configparser.ConfigParser()
 
     github = None
-    github_user = None
     client_id = None
     client_secret = None
 
@@ -189,14 +188,13 @@ class GithubApiQueryConsumer:
         self.ghuser_config.read(gh_user_config)
 
         self.client_id = self.ghuser_config.get('github_user', 'client_id')
-        self.client_secret = self.ghuser_config.get(
-            'github_user', 'client_secret')
+        self.client_secret = self.ghuser_config.get('github_user', 'client_secret')
 
         self.connect_to_github(
             self.client_id,
             self.client_secret)
 
-        self.connect_to_kafka(github_user)
+        self.connect_to_kafka()
 
         self.logger.info("Waiting for messages on %s",
                          self.config.get('kafka', 'api_request_topic'))
