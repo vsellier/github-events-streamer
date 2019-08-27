@@ -180,6 +180,7 @@ class GithubApiQueryConsumer:
         print("Loading configuration from %s" % config_file)
         self.config.read(config_file)
         logging.config.fileConfig(config_file)
+        query_topic = self.config.get('kafka', 'api_request_topic')
 
         self.register_supported_queries()
 
@@ -194,7 +195,7 @@ class GithubApiQueryConsumer:
             self.client_id,
             self.client_secret)
 
-        self.connect_to_kafka()
+        self.connect_to_kafka(query_topic)
 
         self.logger.info("Waiting for messages on %s",
                          self.config.get('kafka', 'api_request_topic'))
