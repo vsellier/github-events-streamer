@@ -27,6 +27,8 @@ class EventRequester:
         self.consumer = KafkaConsumer(
             bootstrap_servers=bootstrap_servers,
             group_id='event_requester',
+            metadata_max_age_ms=60000,
+            heartbeat_interval_ms=1000,            
             # value_deserializer=json.loads,
             key_deserializer=bytes.decode)
 

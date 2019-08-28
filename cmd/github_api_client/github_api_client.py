@@ -90,7 +90,9 @@ class GithubApiQueryConsumer:
             bootstrap_servers=bootstrap_servers,
             group_id='api_caller',
             client_id=consumer_id,
-            session_timeout_ms=30000,
+            # session_timeout_ms=30000,
+            metadata_max_age_ms=60000,
+            heartbeat_interval_ms=1000,
             value_deserializer=json.loads)
 
         self.consumer.subscribe(self.config.get('kafka', 'api_request_topic'))

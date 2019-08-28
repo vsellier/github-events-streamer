@@ -8,7 +8,6 @@ import sys
 import time
 import uuid
 
-
 class EventConverter:
     logger = logging.getLogger()
     config = configparser.ConfigParser()
@@ -41,8 +40,9 @@ class EventConverter:
             group_id=self.consumer_group_id,
             value_deserializer=lambda m: json.loads(m, encoding='utf-8'),
             key_deserializer=self.key_deserializer,
-            session_timeout_ms=60000,
-            heartbeat_interval_ms=10000,
+            # session_timeout_ms=60000,
+            metadata_max_age_ms=60000,
+            heartbeat_interval_ms=1000,
             enable_auto_commit=False,
             auto_offset_reset='earliest',
         )
