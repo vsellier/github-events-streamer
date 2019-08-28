@@ -102,7 +102,7 @@ class GithubApiQueryConsumer:
                                       )
 
     def check_quota(self):
-        self.logger.info("remaining quota: %s reset time: %s",
+        self.logger.info("github quota remaining_calls=%s reset_time=%s",
                          self.last_remaining_github_quota, self.last_github_reset_time)
 
     def wait_quota_reset(self):
