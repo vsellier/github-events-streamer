@@ -8,6 +8,7 @@ import logging
 import logging.config
 import sys
 import time
+import threading
 import pdb
 
 class GithubApiQueryConsumer:
@@ -44,7 +45,7 @@ class GithubApiQueryConsumer:
         self.last_github_reset_time = r.headers['X-RateLimit-Reset']
         return r
 
-    def get_events(self, query, page=0):
+    def get_events_page(self, query, page):
         start = time.time() * 1000
         query_id = query['id']
         url = "https://api.github.com/events?client_id=%s&client_secret=%s&per_page=%s&page=%d" % (
@@ -56,20 +57,30 @@ class GithubApiQueryConsumer:
             return
 
         end = time.time() * 1000
-
         self.logger.info(
-            "id=%s query_type=get_events action=get page=%d duration_ms=%d", query_id, page, end-start)
+            "id=%s github_call action=get page=%d duration_ms=%d", query_id, page, end-start)
 
-        self.logger.debug(r.text)
-        events = r.json()
-        if page == 0:
-            page2 = self.get_events(query, 1)
-            if page2 != None:
-                events.extend(page2)
+        threading.current_thread().result = r.json()
 
-            page3 = self.get_events(query, 2)
-            if page3 != None:
-                events.extend(page3)
+
+    def get_events(self, query, page=0):
+        start = time.time() * 1000
+
+        threads = []
+        for page in range(0,3):
+            thread = threading.Thread(target=self.get_events_page, args=(query, page) )
+            thread.start()
+            threads.append(thread)
+
+        events = []
+        for t in threads:
+            t.join()
+            if t.result != None:
+                events.extend(t.result)
+
+        end = time.time() * 1000
+        self.logger.info(
+            "id=%s query_type=get_events action=get duration_ms=%d", query['id'], end-start)
 
         return events
 
@@ -100,11 +111,9 @@ class GithubApiQueryConsumer:
 
     def send_response(self, topic, key, response):
         start = time.time() * 1000
-        self.logger.info(
-            "Sending response to request_id=%s to topic=%s", key, topic)
         try:
             response = json.dumps(response).encode('utf-8')
-            self.logger.info("request_id=%s response_lenth %d", key, len(response))
+            self.logger.info("request_id=%s sending response to topic=%s response_length=%d", key, topic, len(response))
             future = self.producer.send(topic=topic, key=key,
                                value=response)
             future.error_on_callbacks = True
@@ -132,7 +141,6 @@ class GithubApiQueryConsumer:
         start = time.time() * 1000
         try:
             response = self.queries[query['type']](query, 0)
-            # TODO check presency
             self.send_response(query['response_topic'], id, response)
             end = time.time() * 1000
             self.logger.info(
