@@ -1,0 +1,4 @@
+kafka_url: kafka:9093
+events_topic: github-events
+group_id: event-archiver
+working_directory: /tmp/event-archiver
