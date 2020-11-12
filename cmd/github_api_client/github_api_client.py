@@ -21,6 +21,8 @@ class GithubApiQueryConsumer:
     client_id = None
     client_secret = None
 
+    query_topic = None
+
     consumer = None
     producer = None
 
@@ -84,12 +86,12 @@ class GithubApiQueryConsumer:
 
         return events
 
-    def connect_to_kafka(self, consumer_id):
+    def connect_to_kafka(self):
         bootstrap_servers = self.config.get('kafka', 'bootstrap_servers')
         self.consumer = KafkaConsumer(
             bootstrap_servers=bootstrap_servers,
             group_id='api_caller',
-            client_id=consumer_id,
+            client_id=self.query_topic,
             # session_timeout_ms=30000,
             metadata_max_age_ms=60000,
             heartbeat_interval_ms=1000,
@@ -106,10 +108,21 @@ class GithubApiQueryConsumer:
     def check_quota(self):
         self.logger.info("github quota remaining_calls=%s reset_time=%s",
                          self.last_remaining_github_quota, self.last_github_reset_time)
+        if int(self.last_remaining_github_quota) < 4900 :
+            self.logger.warning("Quota limit reached")
+            self.shutdown()
+            self.wait_quota_reset()
+            self.connect_to_kafka()
+
 
     def wait_quota_reset(self):
-        reset_time = self.github.rate_limiting_resettime()
-        self.logger.info("reset time : %d", reset_time)
+        reset_time = int(self.last_github_reset_time)
+        current = time.time()
+        sleep_time = reset_time - current
+        self.logger.info("reset time : %d current time : %d time to sleep : %d", reset_time, current, sleep_time)
+        self.logger.info("Stopping execution for %d s", sleep_time)
+        time.sleep(5)
+        self.logger.info("Waking up....")
 
     def send_response(self, topic, key, response):
         start = time.time() * 1000
@@ -173,10 +186,12 @@ class GithubApiQueryConsumer:
 
     def shutdown(self):
         self.logger.info("Shutting down kafka consumer ...")
-        self.consumer.commit()
-        self.consumer.close()
+        if self.consumer != None:
+            self.consumer.commit()
+            self.consumer.close()
         self.logger.info("Shuting down kafka producer...")
-        self.producer.close()
+        if self.producer != None:
+            self.producer.close()
 
     def main(self):
         if len(sys.argv) != 3:
@@ -190,7 +205,7 @@ class GithubApiQueryConsumer:
         print("Loading configuration from %s" % config_file)
         self.config.read(config_file)
         logging.config.fileConfig(config_file)
-        query_topic = self.config.get('kafka', 'api_request_topic')
+        self.query_topic = self.config.get('kafka', 'api_request_topic')
 
         self.register_supported_queries()
 
@@ -205,7 +220,7 @@ class GithubApiQueryConsumer:
             self.client_id,
             self.client_secret)
 
-        self.connect_to_kafka(query_topic)
+        self.connect_to_kafka()
 
         self.logger.info("Waiting for messages on %s",
                          self.config.get('kafka', 'api_request_topic'))
