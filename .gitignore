@@ -4,4 +4,5 @@ config-alpha.cfg
 .cache
 .env
 user1.cfg
-
+vendor
+__pycache__
