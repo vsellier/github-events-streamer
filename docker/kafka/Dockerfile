@@ -14,7 +14,7 @@ RUN tar xvzf /tmp/kafka.tgz -C /opt && mv /opt/kafka_2.12-2.3.0 /opt/kafka
 
 FROM ubuntu:18.04
 
-RUN apt-get update && apt-get upgrade && apt-get install -y less && groupadd --gid 1000 kafka && useradd -d /opt/kafka --uid 1000 --gid 1000  kafka \
+RUN apt-get update && apt-get upgrade && apt-get install -y less jq && groupadd --gid 1000 kafka && useradd -d /opt/kafka --uid 1000 --gid 1000  kafka \
   && mkdir -p /usr/lib/jvm && mkdir /data && chown 1000:1000 /data
 
 COPY --from=install /usr/lib/jvm/jdk /usr/lib/jvm/jdk
