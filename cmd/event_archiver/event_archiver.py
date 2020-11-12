@@ -64,6 +64,7 @@ class FilesManager:
 
     def handle_event(self, message):
         event = message.value
+        id = event["id"]
         created_date = event["created_at"]
         parsed_date = dateutil.parser.parse(created_date)
         new_file = False
@@ -76,8 +77,11 @@ class FilesManager:
                 self.logger.warning("adding event to a closed index %s, reopening it", name)
                 self.indexes[name]["closed"] = False
 
+            # upgrade message count for the index
             count = self.indexes[name]["count"] + 1
             self.indexes[name]["count"] = count
+
+            # log some processing informations
             if count % self.checkpoint_interval == 0:
                 now = datetime.now()
                 diff = now - self.checkpoint
